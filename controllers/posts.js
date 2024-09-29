@@ -1,11 +1,13 @@
 const cloudinary = require("../middleware/cloudinary");
 const Post = require("../models/Post");
+const User = require("../models/User");
 
 module.exports = {
   getProfile: async (req, res) => {
     try {
-      const posts = await Post.find({ user: req.user.id });
-      res.render("profile.ejs", { posts: posts, user: req.user });
+      const posts = await Post.find({ user: req.params.id });
+      const user = await User.findById(req.params.id);
+      res.render("profile.ejs", { posts: posts, user: user, userSelf: req.user });
     } catch (err) {
       console.log(err);
     }
@@ -13,7 +15,7 @@ module.exports = {
   getFeed: async (req, res) => {
     try {
       const posts = await Post.find().sort({ createdAt: "desc" }).lean();
-      res.render("feed.ejs", { posts: posts });
+      res.render("feed.ejs", { posts: posts, userSelf: req.user});
     } catch (err) {
       console.log(err);
     }
@@ -21,7 +23,8 @@ module.exports = {
   getPost: async (req, res) => {
     try {
       const post = await Post.findById(req.params.id);
-      res.render("post.ejs", { post: post, user: req.user });
+      const user = await User.findById(post.user);
+      res.render("post.ejs", { post: post, userSelf: req.user, user: user });
     } catch (err) {
       console.log(err);
     }
@@ -40,20 +43,23 @@ module.exports = {
         user: req.user.id,
       });
       console.log("Post has been added!");
-      res.redirect("/profile");
+      res.redirect("/profile/" + req.user.id);
     } catch (err) {
       console.log(err);
     }
   },
   likePost: async (req, res) => {
     try {
-      await Post.findOneAndUpdate(
-        { _id: req.params.id },
-        {
-          $inc: { likes: 1 },
-        }
-      );
-      console.log("Likes +1");
+      const post = await Post.findById(req.params.id);
+      if (!post.likes.includes(req.user.id)) {
+        await Post.findOneAndUpdate(
+          { _id: req.params.id },
+          {
+            $push: { likes: req.user.id },
+          }
+        );
+        console.log("Likes +1");
+      }
       res.redirect(`/post/${req.params.id}`);
     } catch (err) {
       console.log(err);
@@ -68,9 +74,9 @@ module.exports = {
       // Delete post from db
       await Post.remove({ _id: req.params.id });
       console.log("Deleted Post");
-      res.redirect("/profile");
+      res.redirect("/profile/" + req.user.id);
     } catch (err) {
-      res.redirect("/profile");
+      res.redirect("/profile/" + req.user.id);
     }
   },
 };
